@@ -57,6 +57,20 @@ internal class SweNative(
             ADDRESS,
             ADDRESS,
         )
+    private val solEclipseWhenGlob =
+        handle("swe_sol_eclipse_when_glob", JAVA_INT, JAVA_DOUBLE, JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS)
+    private val solEclipseWhenLoc =
+        handle("swe_sol_eclipse_when_loc", JAVA_INT, JAVA_DOUBLE, JAVA_INT, ADDRESS, ADDRESS, ADDRESS, JAVA_INT, ADDRESS)
+    private val solEclipseWhere = handle("swe_sol_eclipse_where", JAVA_INT, JAVA_DOUBLE, JAVA_INT, ADDRESS, ADDRESS, ADDRESS)
+    private val lunEclipseWhen =
+        handle("swe_lun_eclipse_when", JAVA_INT, JAVA_DOUBLE, JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS)
+    private val lunEclipseWhenLoc =
+        handle("swe_lun_eclipse_when_loc", JAVA_INT, JAVA_DOUBLE, JAVA_INT, ADDRESS, ADDRESS, ADDRESS, JAVA_INT, ADDRESS)
+    private val lunEclipseHow = handle("swe_lun_eclipse_how", JAVA_INT, JAVA_DOUBLE, JAVA_INT, ADDRESS, ADDRESS, ADDRESS)
+    private val timeEqu = handle("swe_time_equ", JAVA_INT, JAVA_DOUBLE, ADDRESS, ADDRESS)
+    private val deltatEx = handle("swe_deltat_ex", JAVA_DOUBLE, JAVA_DOUBLE, JAVA_INT, ADDRESS)
+    private val azalt =
+        voidHandle("swe_azalt", JAVA_DOUBLE, JAVA_INT, ADDRESS, JAVA_DOUBLE, JAVA_DOUBLE, ADDRESS, ADDRESS)
     private val setEphePath = voidHandle("swe_set_ephe_path", ADDRESS)
     private val version = handle("swe_version", ADDRESS, ADDRESS)
 
@@ -109,6 +123,86 @@ internal class SweNative(
         result: MemorySegment,
         serr: MemorySegment,
     ): Int = riseTrans.invoke(jdUt, body, NULL, flags, mode, geopos, 0.0, 0.0, result, serr) as Int
+
+    /** Next solar eclipse anywhere on Earth after [jdUt], of any type. */
+    fun solEclipseWhenGlob(
+        jdUt: Double,
+        flags: Int,
+        tret: MemorySegment,
+        serr: MemorySegment,
+    ): Int = solEclipseWhenGlob.invoke(jdUt, flags, 0, tret, 0, serr) as Int
+
+    /** Next solar eclipse visible at [geopos] after [jdUt]. */
+    fun solEclipseWhenLoc(
+        jdUt: Double,
+        flags: Int,
+        geopos: MemorySegment,
+        tret: MemorySegment,
+        attr: MemorySegment,
+        serr: MemorySegment,
+    ): Int = solEclipseWhenLoc.invoke(jdUt, flags, geopos, tret, attr, 0, serr) as Int
+
+    /** Place and attributes of the greatest solar eclipse at [jdUt]; [geopos] receives up to 10 values. */
+    fun solEclipseWhere(
+        jdUt: Double,
+        flags: Int,
+        geopos: MemorySegment,
+        attr: MemorySegment,
+        serr: MemorySegment,
+    ): Int = solEclipseWhere.invoke(jdUt, flags, geopos, attr, serr) as Int
+
+    /** Next lunar eclipse after [jdUt], of any type. */
+    fun lunEclipseWhen(
+        jdUt: Double,
+        flags: Int,
+        tret: MemorySegment,
+        serr: MemorySegment,
+    ): Int = lunEclipseWhen.invoke(jdUt, flags, 0, tret, 0, serr) as Int
+
+    /** Next lunar eclipse visible at [geopos] after [jdUt]. */
+    fun lunEclipseWhenLoc(
+        jdUt: Double,
+        flags: Int,
+        geopos: MemorySegment,
+        tret: MemorySegment,
+        attr: MemorySegment,
+        serr: MemorySegment,
+    ): Int = lunEclipseWhenLoc.invoke(jdUt, flags, geopos, tret, attr, 0, serr) as Int
+
+    /** Attributes of a lunar eclipse at [jdUt]; [geopos] is only used for the Moon's altitude and may be NULL. */
+    fun lunEclipseHow(
+        jdUt: Double,
+        flags: Int,
+        geopos: MemorySegment,
+        attr: MemorySegment,
+        serr: MemorySegment,
+    ): Int = lunEclipseHow.invoke(jdUt, flags, geopos, attr, serr) as Int
+
+    /** Equation of time (local apparent minus local mean time) at [jdUt], in days, written to [out]. */
+    fun timeEqu(
+        jdUt: Double,
+        out: MemorySegment,
+        serr: MemorySegment,
+    ): Int = timeEqu.invoke(jdUt, out, serr) as Int
+
+    /** Delta T (TT - UT) in days. */
+    fun deltatEx(
+        jdUt: Double,
+        flags: Int,
+        serr: MemorySegment,
+    ): Double = deltatEx.invoke(jdUt, flags, serr) as Double
+
+    /** Azimuth, true and apparent altitude ([xaz]) of the point [xin] (ecliptic of date with [SweConstants.SE_ECL2HOR]). */
+    @Suppress("LongParameterList") // mirrors the C signature
+    fun azalt(
+        jdUt: Double,
+        mode: Int,
+        geopos: MemorySegment,
+        xin: MemorySegment,
+        xaz: MemorySegment,
+    ) {
+        azalt.invoke(jdUt, mode, geopos, 0.0, 0.0, xin, xaz)
+    }
 
     fun setEphePath(path: Path) {
         Arena.ofConfined().use { arena -> setEphePath.invoke(arena.allocateFrom(path.toString())) }
