@@ -15,6 +15,7 @@ import me.lagna.ephemeris.swe.SweConstants
 import me.lagna.ephemeris.swe.SweSession
 import me.lagna.ephemeris.timestamp
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
 
 /** The coarse production sampling steps find exactly what sampling every 0.1 day finds. */
@@ -50,12 +51,57 @@ class SearchStepTest {
         }
     }
 
+    /** Differences (sign -1) and sums (+1) of pairs whose stations come closest together, and two slow pairs. */
+    @ParameterizedTest
+    @CsvSource("2, 3, -1", "2, 3, 1", "0, 2, 1", "3, 4, 1", "4, 5, -1", "5, 6, 1")
+    fun `pair station and crossing searches match a fine step`(
+        bodyA: Int,
+        bodyB: Int,
+        sign: Int,
+    ) {
+        val pairTo = JulianDay.of(timestamp("2030-01-01T00:00:00Z"))
+        TestEphemeris.instance.sessionBlocking {
+            val production =
+                pairSearch(bodyA, bodyB, sign, ProtoMapping.pairStationStep(bodyA, bodyB), ProtoMapping.pairCrossingStep(bodyA, bodyB))
+            val fine = pairSearch(bodyA, bodyB, sign, FINE_STEP, MotionSearch.DEFAULT_CROSSING_STEP_DAYS)
+            val expectedStations = fine.stations(from, pairTo)
+            val stations = production.stations(from, pairTo)
+            stations.map { it.turnsRetrograde } shouldBe expectedStations.map { it.turnsRetrograde }
+            stations.zip(expectedStations).forEach { (actual, expected) -> actual.jd shouldBe (expected.jd plusOrMinus TIME_TOLERANCE) }
+            assertSameCrossings(production, fine, pairTo, LongitudeTargets.Grid(120))
+        }
+    }
+
+    private fun SweSession.pairSearch(
+        bodyA: Int,
+        bodyB: Int,
+        sign: Int,
+        stationStep: Double,
+        crossingStep: Double,
+    ) = MotionSearch(
+        source =
+            object : MotionSource {
+                override fun at(jd: Double): Motion {
+                    val a = position(jd, bodyA)
+                    val b = position(jd, bodyB)
+                    return Motion(MotionSearch.normalize(a.longitude + sign * b.longitude), a.longitudeSpeed + sign * b.longitudeSpeed)
+                }
+
+                override fun longitudeAt(jd: Double): Double = MotionSearch.normalize(longitude(jd, bodyA) + sign * longitude(jd, bodyB))
+            },
+        stationStep = stationStep,
+        canStation = ProtoMapping.pairCanStation(bodyA, bodyB),
+        crossingStep = crossingStep,
+    )
+
     private fun assertSameCrossings(
         coarse: MotionSearch,
         fine: MotionSearch,
+        until: Double = to,
+        targets: LongitudeTargets = padas,
     ) {
-        val expected = fine.crossings(from, to, padas)
-        val actual = coarse.crossings(from, to, padas)
+        val expected = fine.crossings(from, until, targets)
+        val actual = coarse.crossings(from, until, targets)
         actual shouldHaveSize expected.size
         actual.zip(expected).forEach { (a, e) ->
             a.longitude shouldBe e.longitude

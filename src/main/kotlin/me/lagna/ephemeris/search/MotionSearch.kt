@@ -170,6 +170,9 @@ sealed interface LongitudeTargets {
  * well under 180 degrees in that time) with the stations added as extra samples, so the longitude is
  * monotonic between consecutive samples and every target in between is crossed exactly once and refined by
  * bisection as well.
+ *
+ * A [forwardOnly] source never moves backwards (the ascendant within the polar circles, the midheaven), so it
+ * has no stations and may move any amount under a full turn between samples, however unevenly.
  */
 class MotionSearch(
     private val source: MotionSource,
@@ -177,10 +180,12 @@ class MotionSearch(
     private val canStation: Boolean,
     private val crossingStep: Double = DEFAULT_CROSSING_STEP_DAYS,
     private val tolerance: Double = DEFAULT_TOLERANCE_DAYS,
+    private val forwardOnly: Boolean = false,
 ) {
     init {
         require(stationStep > 0.0) { "stationStep must be positive" }
         require(crossingStep > 0.0) { "crossingStep must be positive" }
+        require(!(forwardOnly && canStation)) { "a forward-only source cannot station" }
     }
 
     fun stations(
@@ -214,13 +219,13 @@ class MotionSearch(
         limit: Int = Int.MAX_VALUE,
     ): List<CrossingHit> {
         if (to <= from) return emptyList()
-        val knots = sampleTimes(from, to, stations(from, to).map { it.jd })
+        val knots = sampleTimes(from, to, if (forwardOnly) emptyList() else stations(from, to).map { it.jd }).iterator()
         val hits = mutableListOf<CrossingHit>()
-        var a = knots.first()
+        var a = knots.next()
         var longitudeA = source.longitudeAt(a)
-        for (c in knots.drop(1)) {
+        for (c in knots) {
             val longitudeC = source.longitudeAt(c)
-            val delta = signedDelta(longitudeC - longitudeA)
+            val delta = if (forwardOnly) normalize(longitudeC - longitudeA) else signedDelta(longitudeC - longitudeA)
             if (delta != 0.0) {
                 val lower = minOf(longitudeA, longitudeA + delta)
                 val upper = maxOf(longitudeA, longitudeA + delta)
@@ -229,7 +234,13 @@ class MotionSearch(
                     if (target.value == longitudeA) continue // counted in the previous interval
                     if (hits.size == limit) throw TooManyResultsException(limit)
                     val longitude = target.longitude
-                    hits += CrossingHit(refineCrossing(a, c, longitudeA, longitude), longitude, retrograde = delta < 0.0)
+                    val jd =
+                        if (forwardOnly) {
+                            refineForward(a, c, longitudeA, target.value - longitudeA)
+                        } else {
+                            refineCrossing(a, c, longitudeA, longitude)
+                        }
+                    hits += CrossingHit(jd, longitude, retrograde = delta < 0.0)
                 }
             }
             a = c
@@ -238,20 +249,34 @@ class MotionSearch(
         return hits
     }
 
+    /**
+     * [from], every [crossingStep] days after it, [to] and the [stations] (chronological), in order and without
+     * duplicates. Lazy, so that a search stopped at its result limit never builds the samples of the whole range.
+     */
     private fun sampleTimes(
         from: Double,
         to: Double,
         stations: List<Double>,
-    ): List<Double> {
-        val times = sortedSetOf(from, to)
-        var t = from + crossingStep
-        while (t < to) {
-            times += t
-            t += crossingStep
+    ): Sequence<Double> =
+        sequence {
+            val regular = (generateSequence(from) { it + crossingStep }.takeWhile { it < to } + to).iterator()
+            val extra = stations.filter { it > from && it < to }.iterator()
+            var r: Double? = regular.next()
+            var e: Double? = if (extra.hasNext()) extra.next() else null
+            var last = Double.NaN
+            while (r != null || e != null) {
+                val next: Double
+                if (e == null || (r != null && r <= e)) {
+                    next = checkNotNull(r)
+                    r = if (regular.hasNext()) regular.next() else null
+                } else {
+                    next = e
+                    e = if (extra.hasNext()) extra.next() else null
+                }
+                if (next != last) yield(next)
+                last = next
+            }
         }
-        times += stations
-        return times.toList()
-    }
 
     private fun refineStation(
         start: Double,
@@ -280,6 +305,26 @@ class MotionSearch(
             val mid = (lo + hi) / 2
             val offset = signedDelta(source.longitudeAt(mid) - target)
             if (offset != 0.0 && isNegative(offset) == startSide) lo = mid else hi = mid
+        }
+        return (lo + hi) / 2
+    }
+
+    /**
+     * Bisection for a forward-only source, which covers less than a full turn between [start] and [end]: the
+     * distance travelled since [start] grows monotonically, so it is compared with the target's [distance] instead
+     * of comparing angles, which would break wherever the source moves more than 180 degrees between two probes.
+     */
+    private fun refineForward(
+        start: Double,
+        end: Double,
+        longitudeAtStart: Double,
+        distance: Double,
+    ): Double {
+        var lo = start
+        var hi = end
+        while (hi - lo > tolerance) {
+            val mid = (lo + hi) / 2
+            if (normalize(source.longitudeAt(mid) - longitudeAtStart) < distance) lo = mid else hi = mid
         }
         return (lo + hi) / 2
     }

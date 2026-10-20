@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon installDist
 FROM ${JRE_IMAGE}
 LABEL org.opencontainers.image.title="swiss-ephemeris-service" \
       org.opencontainers.image.description="Stateless gRPC ephemeris service built on the Swiss Ephemeris" \
-      org.opencontainers.image.source="https://github.com/drnetua/swiss-ephemeris-service" \
+      org.opencontainers.image.source="https://github.com/vibemade/swiss-ephemeris-service" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 COPY --from=native /out/lib/libswe.so /opt/swe/lib/libswe.so

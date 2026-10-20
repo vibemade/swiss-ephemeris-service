@@ -14,6 +14,7 @@ syntax = "proto3";
 
 package me.lagna.ephemeris.v1;
 
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
 option java_package = "me.lagna.ephemeris.v1";
@@ -41,6 +42,32 @@ service Ephemeris {
   // Exact instants when a body turns retrograde or direct in a range.
   rpc FindStations(StationsRequest) returns (StationsResponse);
 
+  // Exact instants when the difference or the sum of two bodies' longitudes crosses a grid or list of values
+  // in a range: tithis (Moon - Sun, every 12 degrees), karanas (6), nithya yogas (Moon + Sun, 360/27), new and
+  // full moons, the return of a natal Moon - Sun angle, conjunctions and oppositions of two planets.
+  rpc FindPairCrossings(PairCrossingsRequest) returns (PairCrossingsResponse);
+
+  // Exact instants when the ascendant or the midheaven of a place crosses a grid or list of longitudes in a
+  // range: changes of the lagna's sign, navamsa or any other division.
+  rpc FindAngleCrossings(AngleCrossingsRequest) returns (CrossingsResponse);
+
+  // Solar or lunar eclipses in a range, global or as seen from a place.
+  rpc FindEclipses(EclipsesRequest) returns (EclipsesResponse);
+
+  // Returns of a body (or of the difference or sum of two bodies) to its value at a natal instant: solar and
+  // lunar returns, the return of the natal Moon - Sun angle (tithi pravesha).
+  rpc FindReturns(ReturnsRequest) returns (ReturnsResponse);
+
+  // Local mean and local apparent time offsets (equation of time) for instants at places.
+  rpc GetSolarTime(SolarTimeRequest) returns (SolarTimeResponse);
+
+  // Jyotish upagrahas: the Dhuma group (from the Sun) and the Kala group (the ascendant at the portions of the
+  // day or night ruled by the Sun, Mars, Mercury, Jupiter and Saturn).
+  rpc GetUpagrahas(UpagrahasRequest) returns (UpagrahasResponse);
+
+  // Mean longitudes and sighrocca of the classical planets, for motional strength.
+  rpc GetMeanPositions(MeanPositionsRequest) returns (MeanPositionsResponse);
+
   // Engine version, supported date range, limits and the source code location (AGPL section 13).
   rpc GetInfo(InfoRequest) returns (InfoResponse);
 }
@@ -63,6 +90,11 @@ enum Body {
   TRUE_NODE = 12;
   MEAN_APOGEE = 13;
   CHIRON = 14;
+  // Since 0.2.0: the descending node (Ketu), the node's longitude + 180 degrees with its latitude and latitude
+  // speed negated and its other speeds. Accepted wherever a Body is; its stations are the node's. GetRiseSet takes
+  // it with CENTRE_NO_REFRACTION only (it rises when the node sets) and for transits.
+  MEAN_SOUTH_NODE = 15;
+  TRUE_SOUTH_NODE = 16;
 }
 
 enum Ayanamsa {
@@ -75,6 +107,20 @@ enum Ayanamsa {
   TRUE_CHITRAPAKSHA = 6;
   TRUE_REVATI = 7;
   TRUE_PUSHYA = 8;
+  // Since 0.2.0. Each value is the Swiss Ephemeris mode SE_SIDM_<name>; its name in the engine in brackets.
+  USHASHASHI = 9;            // Usha/Shashi
+  SURYASIDDHANTA = 10;       // Suryasiddhanta
+  SURYASIDDHANTA_MSUN = 11;  // Suryasiddhanta, mean Sun
+  ARYABHATA = 12;            // Aryabhata
+  ARYABHATA_MSUN = 13;       // Aryabhata, mean Sun
+  SS_REVATI = 14;            // SS Revati
+  SS_CITRA = 15;             // SS Citra
+  TRUE_MULA = 16;            // True Mula (Chandra Hari)
+  ARYABHATA_522 = 17;        // Aryabhata 522
+  LAHIRI_1940 = 18;          // Lahiri 1940
+  LAHIRI_VP285 = 19;         // Lahiri VP285
+  KRISHNAMURTI_VP291 = 20;   // Krishnamurti-Senthilathiban
+  LAHIRI_ICRC = 21;          // Lahiri ICRC
 }
 
 // Tropical when absent or empty; sidereal with the given ayanamsa otherwise.
@@ -94,7 +140,7 @@ message Sidereal {
 message GeoLocation {
   double latitude = 1;   // degrees, north positive
   double longitude = 2;  // degrees, east positive
-  double altitude_m = 3; // metres above sea level, optional
+  double altitude_m = 3; // metres above sea level, optional; rise, set, upagrahas and eclipses take -500 to 25000
 }
 
 // ---------------------------------------------------------------- positions
@@ -105,6 +151,10 @@ message PositionsRequest {
   Zodiac zodiac = 3;
   // Topocentric positions for this place; geocentric when absent.
   optional GeoLocation observer = 4;
+  // Since 0.2.0: also return the right ascension and declination of every body, and the true obliquity and the
+  // nutation of every instant. Equatorial coordinates refer to the true equator and equinox of date, do not
+  // depend on `zodiac`, and are topocentric when `observer` is set.
+  bool equatorial = 5;
 }
 
 message PositionsResponse {
@@ -114,6 +164,9 @@ message PositionsResponse {
 message InstantPositions {
   google.protobuf.Timestamp instant = 1;
   repeated BodyPosition positions = 2;   // same order as the request's bodies
+  // Present when the request set `equatorial`.
+  optional double true_obliquity = 3;     // degrees, mean obliquity plus nutation in obliquity
+  optional double nutation_longitude = 4; // degrees, nutation in longitude
 }
 
 message BodyPosition {
@@ -124,6 +177,9 @@ message BodyPosition {
   double longitude_speed = 5; // degrees per day, negative when retrograde
   double latitude_speed = 6;
   double distance_speed = 7;
+  // Present when the request set `equatorial`.
+  optional double right_ascension = 8;    // degrees [0, 360)
+  optional double declination = 9;        // degrees, north positive
 }
 
 message PositionRangeRequest {
@@ -183,6 +239,11 @@ message HousesResult {
   // False when the system is undefined at this latitude (e.g. Placidus beyond the polar circles);
   // the angles are still valid then.
   bool cusps_defined = 6;
+  // Since 0.2.0, filled for SRIPATI only (and only when cusps_defined). Bhava madhya: the Porphyry cusps, the
+  // middles of the 12 bhavas (bhava_madhya[0] is the ascendant, [9] the midheaven); bhava sandhi: the Sripati
+  // cusps, equal to `cusps` (bhava_sandhi[0] starts bhava 1), each halfway between two neighbouring madhyas.
+  repeated double bhava_madhya = 7;
+  repeated double bhava_sandhi = 8;
 }
 
 // ---------------------------------------------------------------- rise / set
@@ -281,6 +342,288 @@ message Station {
   bool turns_retrograde = 3; // false: turns direct
 }
 
+// ---------------------------------------------------------------- pair crossings (since 0.2.0)
+
+enum PairCombination {
+  PAIR_COMBINATION_UNSPECIFIED = 0;
+  DIFFERENCE = 1; // longitude(body_a) - longitude(body_b), modulo 360
+  SUM = 2;        // longitude(body_a) + longitude(body_b), modulo 360
+}
+
+// Two different bodies whose longitudes are combined into one value.
+message BodyPair {
+  Body body_a = 1;
+  Body body_b = 2;
+  PairCombination combination = 3;
+  // A node and its own south node are always 180 degrees apart, so their DIFFERENCE is INVALID_ARGUMENT.
+}
+
+message PairCrossingsRequest {
+  BodyPair pair = 1;
+  // Zodiac of both longitudes. A DIFFERENCE does not depend on it; a SUM does (it contains twice the ayanamsa).
+  Zodiac zodiac = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+  // Same rules as CrossingsRequest: a grid whose step divides 360 into whole parts, or a list of values.
+  oneof targets {
+    LongitudeGrid grid = 5;
+    LongitudeList list = 6;
+  }
+}
+
+message PairCrossingsResponse {
+  repeated PairCrossing crossings = 1; // chronological
+}
+
+message PairCrossing {
+  google.protobuf.Timestamp instant = 1;
+  double value = 2;    // the target value crossed, degrees [0, 360)
+  // The combined value was decreasing when it crossed. Pairs with the Moon never reverse: a sum or a difference
+  // with the Moon as body_a always increases, a difference with the Moon as body_b always decreases.
+  bool decreasing = 3;
+}
+
+// ---------------------------------------------------------------- angle crossings (since 0.2.0)
+
+enum ChartAngle {
+  CHART_ANGLE_UNSPECIFIED = 0;
+  ASCENDANT = 1;
+  MIDHEAVEN = 2;
+}
+
+message AngleCrossingsRequest {
+  ChartAngle angle = 1;
+  // The ascendant is only searched within the polar circles: a latitude beyond +-66.5 degrees is
+  // INVALID_ARGUMENT for ASCENDANT (beyond them it jumps and moves backwards). The midheaven works everywhere.
+  GeoLocation location = 2;
+  Zodiac zodiac = 3;
+  google.protobuf.Timestamp from = 4;
+  google.protobuf.Timestamp to = 5;
+  oneof targets {
+    LongitudeGrid grid = 6;
+    LongitudeList list = 7;
+  }
+}
+// The response is CrossingsResponse: `longitude` is the target crossed. Both angles only move forward where the
+// service computes them, so `retrograde` is always false.
+
+// ---------------------------------------------------------------- eclipses (since 0.2.0)
+
+enum EclipseKind {
+  ECLIPSE_KIND_UNSPECIFIED = 0;
+  SOLAR = 1;
+  LUNAR = 2;
+}
+
+enum EclipseType {
+  ECLIPSE_TYPE_UNSPECIFIED = 0;
+  TOTAL = 1;
+  ANNULAR = 2;   // solar only
+  HYBRID = 3;    // solar only, annular-total; only reported globally
+  PARTIAL = 4;
+  PENUMBRAL = 5; // lunar only
+}
+
+message EclipsesRequest {
+  EclipseKind kind = 1;
+  // An eclipse is in the range when its maximum (global, or local when a place is given) is.
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  // Circumstances as seen from this place; global when absent. With a place, only eclipses that are visible
+  // there (some phase with the Sun or Moon above the horizon) are returned.
+  optional GeoLocation location = 4;
+}
+
+message EclipsesResponse {
+  repeated Eclipse eclipses = 1; // chronological
+}
+
+message Eclipse {
+  EclipseKind kind = 1;
+  // Global type; as seen from the place when one was given (a total eclipse is partial outside its path).
+  EclipseType type = 2;
+  // Greatest eclipse. With a place: the local maximum, or the sunrise, sunset, moonrise or moonset when the
+  // maximum itself happens below the horizon.
+  google.protobuf.Timestamp maximum = 3;
+  // Solar: the fraction of the Sun's diameter covered for a partial eclipse, the ratio of the Moon's apparent
+  // diameter to the Sun's for a total, annular or hybrid one (NASA's convention), at greatest eclipse or at the
+  // local maximum. Lunar: the umbral magnitude, or the penumbral magnitude for a penumbral eclipse.
+  double magnitude = 4;
+  // First and last contact of the eclipse: penumbral contacts for a penumbral lunar eclipse, partial-phase
+  // contacts otherwise. Globally, a solar eclipse begins and ends where the penumbra first and last touches the
+  // Earth. With a place the contacts are local and limited to the time the Sun or the Moon is above the
+  // horizon: when it rises or sets during the eclipse, that rise or set is the begin or end (when it sets and rises
+  // again during one eclipse, near the polar circles, the stretch with the maximum is kept).
+  optional google.protobuf.Timestamp begin = 5;
+  optional google.protobuf.Timestamp end = 6;
+  // Beginning and end of the total or annular phase, when there is one (with a place: when it is visible,
+  // limited in the same way).
+  optional google.protobuf.Timestamp totality_begin = 7;
+  optional google.protobuf.Timestamp totality_end = 8;
+}
+
+// ---------------------------------------------------------------- returns (since 0.2.0)
+
+message ReturnsRequest {
+  oneof subject {
+    Body body = 1;       // e.g. SUN for solar returns, MOON for lunar returns
+    BodyPair pair = 2;   // e.g. MOON - SUN for the return of the natal tithi angle
+  }
+  google.protobuf.Timestamp natal = 3; // the instant whose value is to be returned to
+  Zodiac zodiac = 4;                   // sidereal returns differ from tropical ones by the precession since birth
+  // The natal instant itself is never reported as a return, even when the range contains it.
+  google.protobuf.Timestamp from = 5;
+  google.protobuf.Timestamp to = 6;
+}
+
+message ReturnsResponse {
+  double natal_value = 1;              // the body's longitude (or the pair's value) at `natal`, degrees [0, 360)
+  repeated ReturnCrossing returns = 2; // chronological
+}
+
+message ReturnCrossing {
+  google.protobuf.Timestamp instant = 1;
+  bool backwards = 2;                  // crossed while the value was decreasing (retrograde body)
+}
+
+// ---------------------------------------------------------------- solar time (since 0.2.0)
+
+message InstantAtPlace {
+  google.protobuf.Timestamp instant = 1;
+  GeoLocation location = 2;
+}
+
+message SolarTimeRequest {
+  repeated InstantAtPlace queries = 1;
+}
+
+message SolarTimeResponse {
+  repeated SolarTime results = 1;       // same order as the request's queries
+}
+
+message SolarTime {
+  google.protobuf.Duration local_mean_offset = 1;     // longitude x 4 min, east positive: LMT = UTC + this
+  google.protobuf.Duration equation_of_time = 2;      // apparent minus mean solar time at the instant
+  google.protobuf.Duration local_apparent_offset = 3; // sum of the two: LAT = UTC + this
+}
+
+// ---------------------------------------------------------------- upagrahas (since 0.2.0)
+
+enum Upagraha {
+  UPAGRAHA_UNSPECIFIED = 0;
+  // Dhuma group, from the Sun's longitude (BPHS 3.61-64): Dhuma = Sun + 133 deg 20', Vyatipata = 360 - Dhuma,
+  // Parivesha = Vyatipata + 180, Indrachapa = 360 - Parivesha, Upaketu = Indrachapa + 16 deg 40'.
+  DHUMA = 1;
+  VYATIPATA = 2;
+  PARIVESHA = 3;
+  INDRACHAPA = 4;
+  UPAKETU = 5;
+  // Kala group, the ascendant at a point of the portion ruled by the Sun, Mars, Mercury, Jupiter or Saturn.
+  KALA = 6;
+  MRITYU = 7;
+  ARDHAPRAHARA = 8;
+  YAMAGHANTAKA = 9;
+  GULIKA = 10;
+  MANDI = 11;
+}
+
+enum PortionPoint {
+  PORTION_POINT_UNSPECIFIED = 0;
+  PORTION_START = 1;
+  PORTION_MIDDLE = 2;
+  PORTION_END = 3;
+}
+
+message UpagrahasRequest {
+  // Each query counts as 19 items (11 upagrahas, 8 portions) against the per-request limit (GetInfo): 526 queries by
+  // default.
+  repeated InstantAtPlace queries = 1;
+  Zodiac zodiac = 2;
+  // Defines sunrise and sunset, which bound the day and the night. Unspecified: UPPER_LIMB_REFRACTED, as in
+  // GetRiseSet; CENTRE_NO_REFRACTION gives the Hindu sunrise.
+  DiscConvention sunrise = 3;
+  // Point of the portion for Kala, Mrityu, Ardhaprahara, Yamaghantaka and Gulika. Absent: PORTION_START (BPHS 3.70).
+  optional PortionPoint kala_point = 4;
+  // Point of Saturn's portion for Mandi. Absent: the same as Gulika (BPHS treats Gulika and Mandi as one).
+  optional PortionPoint mandi_point = 5;
+}
+
+message UpagrahasResponse {
+  repeated UpagrahaResult results = 1;  // same order as the request's queries
+}
+
+message UpagrahaResult {
+  // The instant lies between sunset and the next sunrise (during polar day or night: the Sun is below the horizon).
+  bool night = 1;
+  // Lord of the Vedic weekday, which begins at sunrise (an instant before sunrise belongs to the previous day).
+  // The weekday is the local mean date of that sunrise; during polar day or night, the local mean date of the instant.
+  Body weekday_lord = 2;
+  // The eight equal portions of the day (sunrise to sunset) or night (sunset to next sunrise) that contain the
+  // instant. Day portions start from the weekday lord, night portions from the fifth weekday lord counted from it;
+  // both follow the weekday order, and the eighth portion has no lord. Empty during polar day or night.
+  repeated DayPortion portions = 3;
+  // All eleven upagrahas in enum order; the Kala group is absent when there is no sunrise or sunset.
+  repeated UpagrahaPosition positions = 4;
+}
+
+message DayPortion {
+  uint32 index = 1;                     // 1..8
+  optional Body lord = 2;               // absent for the eighth portion
+  google.protobuf.Timestamp start = 3;
+  google.protobuf.Timestamp end = 4;
+}
+
+message UpagrahaPosition {
+  Upagraha upagraha = 1;
+  double longitude = 2;                 // degrees [0, 360), in the request's zodiac
+}
+
+// ---------------------------------------------------------------- mean positions (since 0.2.0)
+
+enum MeanModel {
+  MEAN_MODEL_UNSPECIFIED = 0;
+  // Mean elements of modern theory (Simon et al. 1994; the Moon: Chapront, as in Meeus 47.1), referred to the mean
+  // equinox of date and converted to the request's zodiac.
+  MODERN = 1;
+  // Traditional ahargana-based mean planets from published tables; sidereal by construction. Not implemented yet:
+  // UNIMPLEMENTED until the tables' constants are supplied.
+  CLASSICAL = 2;
+}
+
+// The frame the mean longitudes of a response are measured in.
+enum MeanFrame {
+  MEAN_FRAME_UNSPECIFIED = 0;
+  REQUEST_ZODIAC = 1;     // MODERN: the request's zodiac (tropical, or sidereal with its ayanamsa)
+  CLASSICAL_SIDEREAL = 2; // CLASSICAL: the tables' own sidereal frame, unrelated to the request's ayanamsa
+}
+
+message MeanPositionsRequest {
+  repeated google.protobuf.Timestamp instants = 1;
+  repeated Body bodies = 2;             // SUN, MOON, MERCURY, VENUS, MARS, JUPITER, SATURN
+  Zodiac zodiac = 3;                    // MODERN only; CLASSICAL values are in their own sidereal frame
+  MeanModel model = 4;
+}
+
+message MeanPositionsResponse {
+  repeated InstantMeanPositions results = 1; // same order as the request's instants
+  MeanFrame frame = 2;                       // so that CLASSICAL values are never read in the request's zodiac
+}
+
+message InstantMeanPositions {
+  google.protobuf.Timestamp instant = 1;
+  repeated MeanPosition positions = 2;       // same order as the request's bodies
+}
+
+message MeanPosition {
+  Body body = 1;
+  // Mean (madhya) longitude: the planet's heliocentric mean longitude for Mars, Jupiter and Saturn; the mean Sun
+  // for Mercury and Venus; the mean geocentric longitude for the Sun and the Moon. Degrees [0, 360).
+  double mean_longitude = 2;
+  // Sighrocca: the mean Sun for Mars, Jupiter and Saturn; the heliocentric mean longitude for Mercury and Venus.
+  // Absent for the Sun and the Moon.
+  optional double sighrocca = 3;
+}
+
 // ---------------------------------------------------------------- info
 
 message InfoRequest {}
@@ -292,7 +635,7 @@ message InfoResponse {
   uint32 max_items_per_request = 4;          // instants x bodies, queries, ...
   string source_url = 5;                     // AGPL section 13
   uint64 max_stream_items = 6;               // samples x bodies of one StreamPositions
-  // Release of this service, e.g. "0.1.0". Local builds report the Gradle project version (e.g. "0.1.0-SNAPSHOT"),
+  // Release of this service, e.g. "0.2.0". Local builds report the Gradle project version (e.g. "0.2.0-SNAPSHOT"),
   // or "dev" when running from compiled classes rather than a jar.
   string service_version = 7;
 }

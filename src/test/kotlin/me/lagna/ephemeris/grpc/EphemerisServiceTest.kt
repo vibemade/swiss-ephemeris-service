@@ -8,6 +8,7 @@ import io.grpc.StatusException
 import io.grpc.inprocess.InProcessChannelBuilder
 import io.grpc.inprocess.InProcessServerBuilder
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.longs.shouldBeLessThanOrEqual
@@ -328,6 +329,72 @@ class EphemerisServiceTest {
     }
 
     @Test
+    fun `the ayanamsas added in 0_2_0 match swetest`() {
+        // swetest -b1.1.2000 -ut12:00 -ay<SE_SIDM_*>
+        val expected =
+            mapOf(
+                Ayanamsa.USHASHASHI to dms(20, 3, 13.2162),
+                Ayanamsa.SURYASIDDHANTA to dms(20, 53, 28.2803),
+                Ayanamsa.SURYASIDDHANTA_MSUN to dms(20, 40, 35.5981),
+                Ayanamsa.ARYABHATA to dms(20, 53, 28.2835),
+                Ayanamsa.ARYABHATA_MSUN to dms(20, 39, 12.8070),
+                Ayanamsa.SS_REVATI to dms(20, 5, 58.2667),
+                Ayanamsa.SS_CITRA to dms(23, 0, 6.8163),
+                Ayanamsa.TRUE_MULA to dms(24, 34, 33.9785),
+                Ayanamsa.ARYABHATA_522 to dms(20, 34, 19.1176),
+                Ayanamsa.LAHIRI_1940 to dms(23, 50, 18.4322),
+                Ayanamsa.LAHIRI_VP285 to dms(23, 51, 34.6009),
+                Ayanamsa.KRISHNAMURTI_VP291 to dms(23, 46, 35.3824),
+                Ayanamsa.LAHIRI_ICRC to dms(23, 51, 10.5089),
+            )
+        runBlocking {
+            for ((ayanamsa, degrees) in expected) {
+                val response =
+                    client.getAyanamsa(
+                        AyanamsaRequest
+                            .newBuilder()
+                            .addInstants(timestamp("2000-01-01T12:00:00Z"))
+                            .setAyanamsa(ayanamsa)
+                            .build(),
+                    )
+                withClue(ayanamsa) { response.getDegrees(0) shouldBe (degrees plusOrMinus 1e-6) }
+            }
+        }
+    }
+
+    @Test
+    fun `equatorial coordinates, obliquity and nutation match swetest`() {
+        runBlocking {
+            val request =
+                PositionsRequest
+                    .newBuilder()
+                    .addInstants(timestamp("2000-01-01T12:00:00Z"))
+                    .addBodies(Body.SUN)
+                    .addBodies(Body.MOON)
+                    .setZodiac(lahiri) // equatorial coordinates ignore the zodiac
+                    .setEquatorial(true)
+                    .build()
+            val result = client.getPositions(request).getResults(0)
+            // swetest -b1.1.2000 -ut12:00 -p01 -fPad; -pe: true obliquity and nutation in longitude
+            result.getPositions(0).rightAscension shouldBe (281.2783856 plusOrMinus 1e-6)
+            result.getPositions(0).declination shouldBe (-23.0324304 plusOrMinus 1e-6)
+            result.getPositions(1).rightAscension shouldBe (222.4521682 plusOrMinus 1e-6)
+            result.getPositions(1).declination shouldBe (-10.9006385 plusOrMinus 1e-6)
+            result.getPositions(1).longitude shouldBe (199.4705290 plusOrMinus 1e-6) // still sidereal
+            result.trueObliquity shouldBe (23.4376767 plusOrMinus 1e-6)
+            result.nutationLongitude shouldBe (-0.0038699 plusOrMinus 1e-6)
+
+            // swetest ... -p0 -fPa -topo30.52,50.45,0
+            val topocentric = client.getPositions(request.toBuilder().setObserver(kyiv).build()).getResults(0)
+            topocentric.getPositions(0).rightAscension shouldBe (281.2775858 plusOrMinus 1e-6)
+
+            val plain = client.getPositions(request.toBuilder().setEquatorial(false).build()).getResults(0)
+            plain.hasTrueObliquity() shouldBe false
+            plain.getPositions(0).hasRightAscension() shouldBe false
+        }
+    }
+
+    @Test
     fun `queries without their instant are rejected`() {
         runBlocking {
             val houses =
@@ -386,7 +453,7 @@ class EphemerisServiceTest {
     fun `info names the engine and the source`() {
         runBlocking {
             val info = client.getInfo(InfoRequest.getDefaultInstance())
-            info.sourceUrl shouldBe "https://github.com/drnetua/swiss-ephemeris-service"
+            info.sourceUrl shouldBe "https://github.com/vibemade/swiss-ephemeris-service"
             info.engineVersion.startsWith("Swiss Ephemeris") shouldBe true
             info.maxStreamItems shouldBe 1_000_000L
         }
@@ -396,4 +463,10 @@ class EphemerisServiceTest {
         a: Instant,
         b: Instant,
     ): Long = abs(a.epochSecond - b.epochSecond)
+
+    private fun dms(
+        degrees: Int,
+        minutes: Int,
+        seconds: Double,
+    ): Double = degrees + minutes / 60.0 + seconds / 3600.0
 }

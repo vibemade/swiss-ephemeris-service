@@ -69,8 +69,9 @@ class SwissEphemerisTest {
         val modes = listOf(SweConstants.SE_SIDM_LAHIRI, SweConstants.SE_SIDM_RAMAN, SweConstants.SE_SIDM_KRISHNAMURTI)
         val expected = modes.associateWith { mode -> ephemeris.sessionBlocking { ayanamsa(J2000, mode) } }
         runBlocking {
+            // Fewer sessions than the worker queue holds (256), or a slow 2-CPU runner rejects some of them.
             val results =
-                (1..300)
+                (1..240)
                     .map { i ->
                         val mode = modes[i % modes.size]
                         async { mode to ephemeris.session { ayanamsa(J2000, mode) } }

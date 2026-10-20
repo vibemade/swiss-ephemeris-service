@@ -112,6 +112,34 @@ class MotionSearchTest {
     }
 
     @org.junit.jupiter.api.Test
+    fun `a forward-only source may move more than half a turn between samples`() {
+        // One turn a day at an uneven speed (46 to 674 degrees a day), like an ascendant near the polar circle.
+        fun angle(jd: Double) = MotionSearch.normalize(360 * jd + 50 * sin(2 * PI * jd))
+        val uneven = MotionSource { jd -> Motion(angle(jd), Double.NaN) }
+        val coarse =
+            MotionSearch(uneven, stationStep = 0.6, canStation = false, crossingStep = 0.6, forwardOnly = true)
+                .crossings(0.0, 3.0, LongitudeTargets.Grid(12))
+        coarse shouldHaveSize 36
+        coarse.none { it.retrograde } shouldBe true
+        coarse.forEach { MotionSearch.signedDelta(angle(it.jd) - it.longitude) shouldBe (0.0 plusOrMinus 1e-3) }
+        val fine = MotionSearch(uneven, stationStep = 0.01, canStation = false, crossingStep = 0.01).crossings(0.0, 3.0, LongitudeTargets.Grid(12))
+        coarse.map { it.longitude } shouldBe fine.map { it.longitude }
+        coarse.zip(fine).forEach { (c, f) -> c.jd shouldBe (f.jd plusOrMinus 1e-5) }
+        shouldThrow<IllegalArgumentException> { MotionSearch(uneven, stationStep = 1.0, canStation = true, forwardOnly = true) }
+    }
+
+    @org.junit.jupiter.api.Test
+    fun `a search stopped at its limit never samples the whole range`() {
+        // Sampling 1e9 days up front would take gigabytes; lazily, the search stops after a few samples.
+        var calls = 0
+        val counting = MotionSource { jd -> Motion(linear.at(jd).longitude.also { calls++ }, Double.NaN) }
+        shouldThrow<MotionSearch.TooManyResultsException> {
+            MotionSearch(counting, stationStep = 1.0, canStation = false, forwardOnly = true).crossings(0.0, 1e9, LongitudeTargets.Grid(12), limit = 10)
+        }
+        (calls < 10_000) shouldBe true
+    }
+
+    @org.junit.jupiter.api.Test
     fun `signed delta folds angles`() {
         MotionSearch.signedDelta(350.0) shouldBe -10.0
         MotionSearch.signedDelta(-350.0) shouldBe 10.0
