@@ -13,7 +13,7 @@
 ARG JRE_IMAGE=eclipse-temurin:25-jre-noble
 
 FROM ${JRE_IMAGE} AS fetch
-ARG REPOSITORY=drnetua/swiss-ephemeris-service
+ARG REPOSITORY=vibemade/swiss-ephemeris-service
 # "latest/download" for the newest release, or "download/<tag>" for a pinned one.
 ARG RELEASE=latest/download
 # Where the release files are; overridable to test an archive before it is published.
@@ -29,7 +29,7 @@ RUN cd /tmp/release \
 FROM ${JRE_IMAGE}
 LABEL org.opencontainers.image.title="swiss-ephemeris-service" \
       org.opencontainers.image.description="Stateless gRPC ephemeris service built on the Swiss Ephemeris" \
-      org.opencontainers.image.source="https://github.com/drnetua/swiss-ephemeris-service" \
+      org.opencontainers.image.source="https://github.com/vibemade/swiss-ephemeris-service" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 COPY --from=fetch /out/swiss-ephemeris-service/ /app/

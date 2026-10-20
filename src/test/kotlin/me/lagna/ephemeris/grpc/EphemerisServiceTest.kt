@@ -453,7 +453,7 @@ class EphemerisServiceTest {
     fun `info names the engine and the source`() {
         runBlocking {
             val info = client.getInfo(InfoRequest.getDefaultInstance())
-            info.sourceUrl shouldBe "https://github.com/drnetua/swiss-ephemeris-service"
+            info.sourceUrl shouldBe "https://github.com/vibemade/swiss-ephemeris-service"
             info.engineVersion.startsWith("Swiss Ephemeris") shouldBe true
             info.maxStreamItems shouldBe 1_000_000L
         }

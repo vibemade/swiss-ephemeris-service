@@ -47,7 +47,7 @@ data class ServiceConfig(
         const val DEFAULT_MAX_ITEMS = 10_000
         const val DEFAULT_MAX_STREAM_ITEMS = 1_000_000L
         const val DEFAULT_CACHE_MB = 64L
-        const val DEFAULT_SOURCE_URL = "https://github.com/drnetua/swiss-ephemeris-service"
+        const val DEFAULT_SOURCE_URL = "https://github.com/vibemade/swiss-ephemeris-service"
         private const val MB = 1024L * 1024L
 
         /**
