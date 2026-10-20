@@ -7,7 +7,7 @@ plugins {
 
 group = "me.lagna"
 // Releases pass -PreleaseVersion=<x.y.z>; the jar manifest carries it and GetInfo reports it.
-version = (findProperty("releaseVersion") as String?) ?: "0.2.0-SNAPSHOT"
+version = (findProperty("releaseVersion") as String?) ?: "0.2.1-SNAPSHOT"
 
 kotlin {
     jvmToolchain(25)
