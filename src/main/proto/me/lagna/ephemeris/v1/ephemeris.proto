@@ -140,7 +140,7 @@ message Sidereal {
 message GeoLocation {
   double latitude = 1;   // degrees, north positive
   double longitude = 2;  // degrees, east positive
-  double altitude_m = 3; // metres above sea level, optional
+  double altitude_m = 3; // metres above sea level, optional; rise, set, upagrahas and eclipses take -500 to 25000
 }
 
 // ---------------------------------------------------------------- positions
@@ -427,7 +427,7 @@ message EclipsesRequest {
   google.protobuf.Timestamp from = 2;
   google.protobuf.Timestamp to = 3;
   // Circumstances as seen from this place; global when absent. With a place, only eclipses that are visible
-  // there (some phase with the Sun or Moon above the horizon) are returned. Altitude within [-500, 25000] m.
+  // there (some phase with the Sun or Moon above the horizon) are returned.
   optional GeoLocation location = 4;
 }
 
@@ -449,7 +449,8 @@ message Eclipse {
   // First and last contact of the eclipse: penumbral contacts for a penumbral lunar eclipse, partial-phase
   // contacts otherwise. Globally, a solar eclipse begins and ends where the penumbra first and last touches the
   // Earth. With a place the contacts are local and limited to the time the Sun or the Moon is above the
-  // horizon: when it rises or sets during the eclipse, that rise or set is the begin or end.
+  // horizon: when it rises or sets during the eclipse, that rise or set is the begin or end (when it sets and rises
+  // again during one eclipse, near the polar circles, the stretch with the maximum is kept).
   optional google.protobuf.Timestamp begin = 5;
   optional google.protobuf.Timestamp end = 6;
   // Beginning and end of the total or annular phase, when there is one (with a place: when it is visible,

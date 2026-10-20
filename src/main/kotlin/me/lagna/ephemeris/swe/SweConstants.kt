@@ -75,9 +75,9 @@ object SweConstants {
     const val SE_ECL_ANNULAR_TOTAL = 32
     const val SE_ECL_PENUMBRAL = 64
 
-    /** Altitudes `swe_*_eclipse_*` accept, in metres (`SEI_ECL_GEOALT_MIN` / `MAX` in `sweph.h`). */
-    const val ECLIPSE_ALTITUDE_MIN = -500.0
-    const val ECLIPSE_ALTITUDE_MAX = 25_000.0
+    /** Altitudes `swe_rise_trans` and `swe_*_eclipse_*` accept, in metres (`SEI_ECL_GEOALT_MIN` / `MAX` in `sweph.h`). */
+    const val HORIZON_ALTITUDE_MIN = -500.0
+    const val HORIZON_ALTITUDE_MAX = 25_000.0
 
     const val SE_CALC_RISE = 1
     const val SE_CALC_SET = 2

@@ -43,7 +43,7 @@ Most integration bugs come from time zones and sign conventions, so read this se
 
 - **Time** is `google.protobuf.Timestamp` in UTC (in JSON: RFC 3339, `"2000-01-01T12:00:00Z"`). The service treats it as UT1; the two differ by under 0.9 s. Convert local civil time to UTC yourself with a time-zone database that holds historical offsets.
 - **Supported range** is 1800-01-02T00:00Z to 2400-01-01T00:00Z, also returned by `GetInfo`. Any instant outside it fails with `OUT_OF_RANGE`.
-- **Geographic coordinates** are degrees with **north and east positive**: Kyiv is latitude 50.45, longitude 30.52; New York is longitude −74.0. Altitude is in metres and optional.
+- **Geographic coordinates** are degrees with **north and east positive**: Kyiv is latitude 50.45, longitude 30.52; New York is longitude −74.0. Altitude is in metres and optional; `GetRiseSet`, `GetUpagrahas` and `FindEclipses` accept −500 to 25,000 m.
 - **Angles** are degrees. Ecliptic longitudes are in [0, 360). Speeds are degrees per day and are negative while a body is retrograde. Distances are in astronomical units.
 - **Zodiac:** omit `zodiac` (or send `tropical`) for tropical longitudes; send `sidereal` with an `ayanamsa` for sidereal ones. Every longitude in a request and its response uses the same zodiac.
 - **Positions** are geocentric and apparent; pass `observer` to `GetPositions` for topocentric ones. Set `equatorial` to also get right ascension and declination (true equator and equinox of date, whatever the zodiac).
@@ -174,7 +174,7 @@ Exact instants the `ASCENDANT` or `MIDHEAVEN` of `location` crosses a `grid` or 
 
 ### FindEclipses
 
-Solar or lunar eclipses (`kind`) whose maximum lies between `from` and `to`, in time order. Without `location` they are global; with one, only the eclipses visible there (some phase with the Sun or Moon above the horizon), with their local type and magnitude, and contacts limited to the time the body is above the horizon: a sunrise, sunset, moonrise or moonset during the eclipse becomes its `begin`, `end` or `maximum`. The location's altitude must lie between −500 and 25,000 m.
+Solar or lunar eclipses (`kind`) whose maximum lies between `from` and `to`, in time order. Without `location` they are global; with one, only the eclipses visible there (some phase with the Sun or Moon above the horizon), with their local type and magnitude, and contacts limited to the time the body is above the horizon: a sunrise, sunset, moonrise or moonset during the eclipse becomes its `begin`, `end` or `maximum` (where the body sets and rises again during one eclipse, near the polar circles, the stretch with the maximum is kept).
 
 - `magnitude`: solar eclipses use NASA's convention (the fraction of the Sun's diameter covered for a partial eclipse, the ratio of the apparent diameters for a total, annular or hybrid one); lunar eclipses the umbral magnitude, or the penumbral magnitude for a penumbral eclipse.
 - `begin`, `end`: penumbral contacts for a penumbral lunar eclipse, partial-phase contacts otherwise; for a global solar eclipse, the first and last contact of the penumbra with the Earth. `totalityBegin`, `totalityEnd`: the total or annular phase, when there is one.

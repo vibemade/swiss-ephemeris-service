@@ -157,11 +157,11 @@ internal object ProtoMapping {
         return Place(location.latitude, location.longitude, location.altitudeM)
     }
 
-    /** A place for libswe's eclipse functions, which only accept altitudes from -500 to 25,000 m. */
-    fun eclipsePlace(location: GeoLocation): Place =
+    /** A place for libswe's rise/set and eclipse functions, which only accept altitudes from -500 to 25,000 m. */
+    fun horizonPlace(location: GeoLocation): Place =
         place(location).also {
-            if (it.altitude !in SweConstants.ECLIPSE_ALTITUDE_MIN..SweConstants.ECLIPSE_ALTITUDE_MAX) {
-                invalid("altitude must be within [-500, 25000] m for eclipses")
+            if (it.altitude !in SweConstants.HORIZON_ALTITUDE_MIN..SweConstants.HORIZON_ALTITUDE_MAX) {
+                invalid("altitude must be within [-500, 25000] m for rise, set and eclipses")
             }
         }
 

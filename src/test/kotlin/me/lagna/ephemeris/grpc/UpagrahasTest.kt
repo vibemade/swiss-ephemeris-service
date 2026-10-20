@@ -2,6 +2,9 @@
 package me.lagna.ephemeris.grpc
 
 import com.google.protobuf.Timestamp
+import io.grpc.Status
+import io.grpc.StatusException
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.shouldBe
@@ -140,6 +143,52 @@ class UpagrahasTest {
             polarNight.night shouldBe true
             midnightSun.night shouldBe false
             polarNight.weekdayLord shouldBe Body.MOON // 2026-12-21 is a Monday
+        }
+    }
+
+    @Test
+    fun `the first day after the polar night has its portions`() {
+        runBlocking {
+            val tromso = place(69.65, 18.96)
+            val days = (0L until 30L).map { LocalDate.parse("2027-01-01").plusDays(it) }
+            val times =
+                client
+                    .getRiseSet(
+                        RiseSetRequest
+                            .newBuilder()
+                            .setBody(Body.SUN)
+                            .setConvention(hindu)
+                            .addAllQueries(
+                                days.map {
+                                    RiseSetQuery
+                                        .newBuilder()
+                                        .setAfter(timestamp("${it}T00:00:00Z"))
+                                        .setLocation(tromso)
+                                        .addEvents(RiseSetEvent.RISE)
+                                        .addEvents(RiseSetEvent.SET)
+                                        .build()
+                                },
+                            ).build(),
+                    ).resultsList
+                    .filter { it.getTimes(0).hasInstant() && it.getTimes(1).hasInstant() }
+            val first = times.minBy { it.getTimes(0).instant.seconds }
+            val (sunrise, sunset) = first.getTimes(0).instant to first.getTimes(1).instant
+            val result = upagrahas(listOf(midpoint(sunrise, sunset)), tromso).single()
+            result.night shouldBe false
+            result.portionsList shouldHaveSize 8
+            secondsBetween(result.portionsList.first().start, sunrise) shouldBe (0.0 plusOrMinus 1.0)
+            result.positionsList shouldHaveSize 11
+        }
+    }
+
+    @Test
+    fun `altitudes libswe cannot use for rise and set are rejected`() {
+        runBlocking {
+            val error =
+                shouldThrow<StatusException> {
+                    upagrahas(listOf(timestamp("2026-10-19T09:00:00Z")), kyiv.toBuilder().setAltitudeM(30_000.0).build())
+                }
+            error.status.code shouldBe Status.Code.INVALID_ARGUMENT
         }
     }
 

@@ -216,7 +216,7 @@ class EphemerisService(
                                 }
                             event to mode
                         }
-                    Triple(julianDay(query.after), ProtoMapping.place(query.location), modes)
+                    Triple(julianDay(query.after), ProtoMapping.horizonPlace(query.location), modes)
                 }
             ephemeris.session {
                 val response = RiseSetResponse.newBuilder()
@@ -324,7 +324,7 @@ class EphemerisService(
         guarded {
             val solar = ProtoMapping.isSolar(request.kind)
             val (from, to) = range(request.hasFrom(), request.from, request.hasTo(), request.to)
-            val place = if (request.hasLocation()) ProtoMapping.eclipsePlace(request.location) else null
+            val place = if (request.hasLocation()) ProtoMapping.horizonPlace(request.location) else null
             val kind = request.kind
             cache.getOrCompute(CacheKey("FindEclipses", request), EclipsesResponse.parser()) {
                 ephemeris.session {
@@ -400,7 +400,7 @@ class EphemerisService(
 
     override suspend fun getUpagrahas(request: UpagrahasRequest): UpagrahasResponse =
         guarded {
-            val queries = instantsAtPlaces(request.queriesList)
+            val queries = instantsAtPlaces(request.queriesList, horizon = true)
             val settings =
                 UpagrahaSettings(
                     frame = ProtoMapping.frame(request.zodiac, request.hasZodiac()),
@@ -627,14 +627,17 @@ class EphemerisService(
         return jd
     }
 
-    /** Validated {instant, place} queries of GetSolarTime and GetUpagrahas. */
-    private fun instantsAtPlaces(queries: List<InstantAtPlace>): List<Pair<Double, Place>> {
+    /** Validated {instant, place} queries of GetSolarTime and GetUpagrahas ([horizon]: the places see rises and sets). */
+    private fun instantsAtPlaces(
+        queries: List<InstantAtPlace>,
+        horizon: Boolean = false,
+    ): List<Pair<Double, Place>> {
         requireNotEmpty(queries.size, "queries")
         requireWithinLimit(queries.size.toLong(), "queries")
         return queries.map { query ->
             if (!query.hasInstant()) invalid("every query needs an instant")
             if (!query.hasLocation()) invalid("every query needs a location")
-            julianDay(query.instant) to ProtoMapping.place(query.location)
+            julianDay(query.instant) to if (horizon) ProtoMapping.horizonPlace(query.location) else ProtoMapping.place(query.location)
         }
     }
 

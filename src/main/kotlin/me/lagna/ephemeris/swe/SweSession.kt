@@ -277,7 +277,7 @@ class SweSession internal constructor(
         attr.clear()
         val flags = native.solEclipseWhenLoc(jdUt, SEFLG_SWIEPH, geopos, tret, attr, serr)
         requireEclipse(flags, "swe_sol_eclipse_when_loc")
-        val visible = Window(rise = tret.instant(5), set = tret.instant(6))
+        val visible = Window(rise = tret.instant(5), set = tret.instant(6), maximum = tret.at(0))
         val type = solarType(flags)
         val totality =
             if (type == EclipseType.PARTIAL) null else visible.clip(tret.instant(2), tret.instant(3))
@@ -311,37 +311,49 @@ class SweSession internal constructor(
         attr.clear()
         val flags = native.lunEclipseWhenLoc(jdUt, SEFLG_SWIEPH, geopos, tret, attr, serr)
         requireEclipse(flags, "swe_lun_eclipse_when_loc")
-        return lunarEvent(lunarType(flags), tret.at(0), moonrise = tret.instant(8), moonset = tret.instant(9))
+        val maximum = tret.at(0)
+        val visible = Window(rise = tret.instant(8), set = tret.instant(9), maximum = maximum)
+        // libswe zeroes the local contacts the Moon is below the horizon for; the same eclipse found globally (its
+        // maximum is within hours of the local one) gives all of them, which are then limited like the solar ones.
+        tret.clear()
+        requireEclipse(native.lunEclipseWhen(maximum - ECLIPSE_MARGIN_DAYS, SEFLG_SWIEPH, tret, serr), "swe_lun_eclipse_when")
+        return lunarEvent(lunarType(flags), maximum, visible)
     }
 
-    /**
-     * Contacts from `tret` as `swe_lun_eclipse_when(_loc)` fills it, magnitude from `attr` at the maximum. Locally,
-     * libswe zeroes the contacts the Moon is below the horizon for, so a zero becomes the moonrise or moonset.
-     */
+    /** Contacts from `tret` as `swe_lun_eclipse_when` fills it, limited to [visible]; magnitude from `attr`. */
     private fun lunarEvent(
         type: EclipseType,
         maximum: Double,
-        moonrise: Double? = null,
-        moonset: Double? = null,
+        visible: Window = Window(rise = null, set = null, maximum = maximum),
     ): EclipseEvent {
         val penumbral = type == EclipseType.PENUMBRAL
-        val total = type == EclipseType.TOTAL
+        val contacts = visible.clip(tret.instant(if (penumbral) 6 else 2), tret.instant(if (penumbral) 7 else 3))
+        val totality = if (type == EclipseType.TOTAL) visible.clip(tret.instant(4), tret.instant(5)) else null
         return EclipseEvent(
             type = type,
             maximum = maximum,
             magnitude = attr.at(if (penumbral) ATTR_PENUMBRAL_MAGNITUDE else ATTR_UMBRAL_MAGNITUDE),
-            begin = tret.instant(if (penumbral) 6 else 2) ?: moonrise,
-            end = tret.instant(if (penumbral) 7 else 3) ?: moonset,
-            totalityBegin = if (total) tret.instant(4) ?: moonrise else null,
-            totalityEnd = if (total) tret.instant(5) ?: moonset else null,
+            begin = contacts?.first,
+            end = contacts?.second,
+            totalityBegin = totality?.first,
+            totalityEnd = totality?.second,
         )
     }
 
-    /** When the eclipsed body is above the horizon: [rise] and [set] are only known when they fall in the eclipse. */
+    /**
+     * When the eclipsed body is above the horizon; libswe reports a rise or set only when it falls within the eclipse.
+     * Near the polar circles the body can set and rise again during one eclipse; then the stretch with the maximum
+     * (always above the horizon) is kept.
+     */
     private class Window(
-        val rise: Double?,
-        val set: Double?,
+        rise: Double?,
+        set: Double?,
+        maximum: Double,
     ) {
+        private val upTwice = rise != null && set != null && set < rise
+        val rise: Double? = if (upTwice && maximum <= checkNotNull(set)) null else rise
+        val set: Double? = if (upTwice && maximum > checkNotNull(set)) null else set
+
         fun clipBegin(jd: Double): Double = rise?.let { maxOf(it, jd) } ?: jd
 
         fun clipEnd(jd: Double): Double = set?.let { minOf(it, jd) } ?: jd
@@ -400,6 +412,9 @@ class SweSession internal constructor(
         const val ATTR_UMBRAL_MAGNITUDE = 0
         const val ATTR_PENUMBRAL_MAGNITUDE = 1
         const val ATTR_NASA_MAGNITUDE = 8
+
+        /** The local maximum of a lunar eclipse is within a few hours of the global one. */
+        const val ECLIPSE_MARGIN_DAYS = 0.5
 
         /** Any system gives the same angles; equal houses are the cheapest and defined at every latitude. */
         const val EQUAL_HOUSES = 'E'

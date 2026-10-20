@@ -96,7 +96,11 @@ private fun SweSession.dayHalf(
         mode: Int,
     ): Double? = riseTrans(after, SweConstants.SE_SUN, place, mode)
 
-    var sunrise = next(jd - SUNRISE_LOOKBACK_DAYS, settings.riseMode)?.takeIf { it <= jd } ?: return null
+    // At high latitudes libswe only looks about a day ahead for a rise, so the first sunrise after a polar night can be
+    // out of reach from the furthest start; nearer starts find it.
+    var sunrise =
+        SUNRISE_LOOKBACKS_DAYS.firstNotNullOfOrNull { lookback -> next(jd - lookback, settings.riseMode)?.takeIf { it <= jd } }
+            ?: return null
     while (true) {
         val later = next(sunrise + MIN_RISE_GAP_DAYS, settings.riseMode)
         if (later == null || later > jd) break
@@ -158,7 +162,7 @@ private val DHUMA_GROUP = listOf(Upagraha.DHUMA, Upagraha.VYATIPATA, Upagraha.PA
 private val KALA_GROUP = listOf(Upagraha.KALA, Upagraha.MRITYU, Upagraha.ARDHAPRAHARA, Upagraha.YAMAGHANTAKA, Upagraha.GULIKA)
 
 /** Sunrises are about a day apart outside the polar regions; a longer gap means polar day or night. */
-private const val SUNRISE_LOOKBACK_DAYS = 1.5
+private val SUNRISE_LOOKBACKS_DAYS = listOf(1.5, 1.0, 0.5)
 
 /** Skips past a sunrise so that the next search finds the following one. */
 private const val MIN_RISE_GAP_DAYS = 0.25
