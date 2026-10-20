@@ -40,7 +40,13 @@ object MeanElements {
     /** Julian centuries of TT since J2000.0 for a Julian day in TT. */
     fun centuries(jdTt: Double): Double = (jdTt - J2000) / DAYS_PER_CENTURY
 
-    fun normalize(degrees: Double): Double = (degrees % FULL_CIRCLE + FULL_CIRCLE) % FULL_CIRCLE
+    /** Angle folded into [0, 360); an angle already in that range is returned exactly. */
+    fun normalize(degrees: Double): Double {
+        val remainder = degrees % FULL_CIRCLE
+        if (remainder >= 0.0) return remainder + 0.0 // turns -0.0 into 0.0
+        val wrapped = remainder + FULL_CIRCLE
+        return if (wrapped >= FULL_CIRCLE) 0.0 else wrapped
+    }
 
     private const val J2000 = 2451545.0
     private const val DAYS_PER_CENTURY = 36525.0

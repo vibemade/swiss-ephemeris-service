@@ -140,9 +140,34 @@ class MotionSearchTest {
     }
 
     @org.junit.jupiter.api.Test
+    fun `a sample on the target, up to round-off, does not push the crossing to the end of its interval`() {
+        // 1 degree a day from 0; the sample at day 10 is 10.0, the target one ulp above it. Its difference used to fold
+        // to 0, read as "past the target", and the bisection then ran to the next sample, day 11.
+        val rising = MotionSource { jd -> Motion(MotionSearch.normalize(jd), 1.0) }
+        val target = Math.nextUp(10.0)
+        val hits = MotionSearch(rising, stationStep = 1.0, canStation = false).crossings(0.0, 20.0, LongitudeTargets.Explicit(listOf(target)))
+        hits shouldHaveSize 1
+        hits[0].jd shouldBe (10.0 plusOrMinus 1e-5)
+        hits[0].longitude shouldBe target // list targets come back exactly as given
+        // The same while moving backwards: one ulp below the sample.
+        val falling = MotionSource { jd -> Motion(MotionSearch.normalize(-jd), -1.0) }
+        val below = Math.nextDown(350.0)
+        val back = MotionSearch(falling, stationStep = 1.0, canStation = false).crossings(0.0, 20.0, LongitudeTargets.Explicit(listOf(below)))
+        back shouldHaveSize 1
+        back[0].jd shouldBe (10.0 plusOrMinus 1e-5)
+        back[0].retrograde shouldBe true
+    }
+
+    @org.junit.jupiter.api.Test
     fun `signed delta folds angles`() {
         MotionSearch.signedDelta(350.0) shouldBe -10.0
         MotionSearch.signedDelta(-350.0) shouldBe 10.0
+        MotionSearch.signedDelta(-1e-15) shouldBe -1e-15
+        MotionSearch.signedDelta(180.0) shouldBe -180.0
         MotionSearch.normalize(-30.0) shouldBe 330.0
+        MotionSearch.normalize(42.354824666591) shouldBe 42.354824666591
+        MotionSearch.normalize(-1e-20) shouldBe 0.0
+        MotionSearch.normalize(-0.0).equals(0.0) shouldBe true
+        MotionSearch.normalize(720.5) shouldBe 0.5
     }
 }
