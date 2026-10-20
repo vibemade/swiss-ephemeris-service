@@ -25,7 +25,7 @@ The contract is [`ephemeris.proto`](src/main/proto/me/lagna/ephemeris/v1/ephemer
 | `FindReturns` | 0.2 | Returns of a body or a pair to its natal value (solar and lunar returns, tithi pravesha) |
 | `GetSolarTime` | 0.2 | Local mean and local apparent time offsets (equation of time) |
 | `GetUpagrahas` | 0.2 | Dhuma and Kala groups of upagrahas, with the eight portions of the day or night |
-| `GetMeanPositions` | 0.2 | Mean longitudes and sighrocca of the Sun, Moon and Mercury to Saturn |
+| `GetMeanPositions` | 0.2 | Mean longitudes and sighrocca of the Sun, Moon and Mercury to Saturn: modern mean elements, and since 0.2.1 the classical (ahargana) tables of Raman's "Graha and Bhava Balas" |
 | `GetInfo` | 0.1 | Engine version, supported date range, limits and the source code location |
 
 | Input | Supported |
@@ -148,7 +148,8 @@ Environment variables (system properties in brackets, used by Gradle runs and te
   in memory. A shared cache can implement the same interface using `CacheKey.digest()` (SHA-256 of the method
   and the deterministically serialised request).
 - **Jyotish points.** The service computes a few points that follow from astronomy and simple arithmetic alone:
-  Ketu, Sripati bhavas, upagrahas (BPHS 3.61–70) and mean planets (Simon et al. 1994; the Moon per Meeus 47.1).
+  Ketu, Sripati bhavas, upagrahas (BPHS 3.61–70) and mean planets (modern: Simon et al. 1994, the Moon per
+  Meeus 47.1; classical: B. V. Raman, "Graha and Bhava Balas", tables I–IX).
   Rules of interpretation stay with the clients.
 - **Time.** Instants are UTC and are used as UT1; the difference is under a second.
 

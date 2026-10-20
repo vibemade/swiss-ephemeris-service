@@ -426,17 +426,26 @@ class EphemerisService(
             requireWithinLimit(request.instantsCount.toLong() * request.bodiesCount, "instants x bodies")
             if (request.bodiesList.any { it !in MEAN_BODIES }) invalid("mean positions exist for the Sun, the Moon and Mercury to Saturn only")
             when (request.model) {
-                MeanModel.MODERN -> Unit
-                MeanModel.CLASSICAL ->
-                    throw status(Status.UNIMPLEMENTED, "the CLASSICAL model awaits the constants of its tables; use MODERN")
+                MeanModel.MODERN -> {
+                    val frame = ProtoMapping.frame(request.zodiac, request.hasZodiac())
+                    val instants = request.instantsList.map { it to julianDay(it) }
+                    ephemeris.session {
+                        val response = MeanPositionsResponse.newBuilder().setFrame(MeanFrame.REQUEST_ZODIAC)
+                        for ((timestamp, jd) in instants) response.addResults(meanPositions(timestamp, jd, request.bodiesList, frame))
+                        response.build()
+                    }
+                }
+
+                MeanModel.CLASSICAL -> {
+                    if (ProtoBody.MOON in request.bodiesList) invalid("the CLASSICAL model has no mean Moon; use MODERN for it")
+                    val instants = request.instantsList.map { it to julianDay(it) }
+                    // Plain arithmetic of the tables' constants: no libswe session needed, and the zodiac is ignored.
+                    val response = MeanPositionsResponse.newBuilder().setFrame(MeanFrame.CLASSICAL_SIDEREAL)
+                    for ((timestamp, jd) in instants) response.addResults(classicalMeanPositions(timestamp, jd, request.bodiesList))
+                    response.build()
+                }
+
                 MeanModel.MEAN_MODEL_UNSPECIFIED, MeanModel.UNRECOGNIZED, null -> invalid("model must be specified")
-            }
-            val frame = ProtoMapping.frame(request.zodiac, request.hasZodiac())
-            val instants = request.instantsList.map { it to julianDay(it) }
-            ephemeris.session {
-                val response = MeanPositionsResponse.newBuilder().setFrame(MeanFrame.REQUEST_ZODIAC)
-                for ((timestamp, jd) in instants) response.addResults(meanPositions(timestamp, jd, request.bodiesList, frame))
-                response.build()
             }
         }
 

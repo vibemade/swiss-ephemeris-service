@@ -2,8 +2,10 @@
 package me.lagna.ephemeris.grpc
 
 import com.google.protobuf.Timestamp
+import me.lagna.ephemeris.points.ClassicalMeanPlanets
 import me.lagna.ephemeris.points.MeanElements
 import me.lagna.ephemeris.points.MeanElements.Planet
+import me.lagna.ephemeris.points.ClassicalMeanPlanets.Element as Classical
 import me.lagna.ephemeris.points.Upagrahas
 import me.lagna.ephemeris.swe.Frame
 import me.lagna.ephemeris.swe.JulianDay
@@ -141,6 +143,34 @@ internal fun SweSession.meanPositions(
             }
         val position = MeanPosition.newBuilder().setBody(body).setMeanLongitude(inFrame(mean))
         sighrocca?.let { position.setSighrocca(inFrame(it)) }
+        result.addPositions(position)
+    }
+    return result.build()
+}
+
+/** Mean positions (CLASSICAL model, the tables' own sidereal frame) of the requested bodies, the Moon excluded. */
+internal fun classicalMeanPositions(
+    timestamp: Timestamp,
+    jd: Double,
+    bodies: List<ProtoBody>,
+): InstantMeanPositions {
+    fun of(element: Classical) = ClassicalMeanPlanets.longitude(element, jd)
+
+    val sun = of(Classical.SUN)
+    val result = InstantMeanPositions.newBuilder().setInstant(timestamp)
+    for (body in bodies) {
+        val (mean, sighrocca) =
+            when (body) {
+                ProtoBody.SUN -> sun to null
+                ProtoBody.MERCURY -> sun to of(Classical.MERCURY_SIGHROCCA)
+                ProtoBody.VENUS -> sun to of(Classical.VENUS_SIGHROCCA)
+                ProtoBody.MARS -> of(Classical.MARS) to sun
+                ProtoBody.JUPITER -> of(Classical.JUPITER) to sun
+                ProtoBody.SATURN -> of(Classical.SATURN) to sun
+                else -> error("no classical mean position for $body") // the service validates the bodies first
+            }
+        val position = MeanPosition.newBuilder().setBody(body).setMeanLongitude(mean)
+        sighrocca?.let { position.setSighrocca(it) }
         result.addPositions(position)
     }
     return result.build()
