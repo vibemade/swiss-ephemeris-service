@@ -400,6 +400,9 @@ class EphemerisService(
 
     override suspend fun getUpagrahas(request: UpagrahasRequest): UpagrahasResponse =
         guarded {
+            // Each query returns 19 items (11 upagrahas, 8 portions), so the batch limit counts it that many times;
+            // otherwise a full batch of 10,000 queries would exceed gRPC's default 4 MiB message size.
+            requireWithinLimit(request.queriesCount.toLong() * ITEMS_PER_UPAGRAHA_QUERY, "queries x $ITEMS_PER_UPAGRAHA_QUERY")
             val queries = instantsAtPlaces(request.queriesList, horizon = true)
             val settings =
                 UpagrahaSettings(
@@ -683,6 +686,7 @@ class EphemerisService(
         const val FULL_CIRCLE = 360.0
         val MEAN_BODIES =
             setOf(ProtoBody.SUN, ProtoBody.MOON, ProtoBody.MERCURY, ProtoBody.VENUS, ProtoBody.MARS, ProtoBody.JUPITER, ProtoBody.SATURN)
+        const val ITEMS_PER_UPAGRAHA_QUERY = 19
         const val SECONDS_PER_DAY = 86_400.0
 
         /** Local mean time runs 4 minutes ahead per degree of longitude east. */

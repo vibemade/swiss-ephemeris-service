@@ -147,7 +147,7 @@ Returns every station in the range, in time order: the instant, the longitude an
 
 ### FindPairCrossings
 
-The value `lon(bodyA) − lon(bodyB)` (`DIFFERENCE`) or `lon(bodyA) + lon(bodyB)` (`SUM`), modulo 360, in the request's zodiac, crossing a `grid` or `list` exactly as in `FindCrossings`. Returns the crossings in time order with the target `value` and `decreasing` (the value was falling; never with the Moon, which always outruns the other body). A difference does not depend on the zodiac; a sum contains twice the ayanamsa. The two bodies must differ. Limit: 10,000 results.
+The value `lon(bodyA) − lon(bodyB)` (`DIFFERENCE`) or `lon(bodyA) + lon(bodyB)` (`SUM`), modulo 360, in the request's zodiac, crossing a `grid` or `list` exactly as in `FindCrossings`. Returns the crossings in time order with the target `value` and `decreasing` (the value was falling). The Moon always outruns the other body, so a pair with the Moon never reverses: a sum or a difference with the Moon as `bodyA` always increases, a difference with the Moon as `bodyB` always decreases. A difference does not depend on the zodiac; a sum contains twice the ayanamsa. The two bodies must differ, and a node with its own south node is no pair for a `DIFFERENCE` (always 180°). Limit: 10,000 results.
 
 | Use | Request |
 | --- | --- |
@@ -207,7 +207,7 @@ For each query (an instant at a place), in the request's zodiac:
 - **Kala group** (BPHS 3.66–70): the ascendant at `kalaPoint` (default start) of the portion of the Sun (Kala), Mars (Mrityu), Mercury (Ardhaprahara), Jupiter (Yamaghantaka) and Saturn (Gulika). Mandi equals Gulika unless `mandiPoint` places it elsewhere in Saturn's portion.
 - **Polar day or night:** `portions` is empty and the Kala group absent; `night` tells whether the Sun is below the horizon and `weekdayLord` follows the local mean date of the instant.
 
-Limit: 10,000 queries.
+Limit: queries × 19 ≤ 10,000 (526 queries), since every query returns 19 items: 11 upagrahas and 8 portions.
 
 ```json
 {"queries": [{"instant": "2026-10-20T09:00:00Z", "location": {"latitude": 50.45, "longitude": 30.52}}],
@@ -240,7 +240,8 @@ Errors are standard gRPC status codes with a human-readable description; only `U
 | --- | --- |
 | Instants × bodies (`GetPositions`), instants (`GetAyanamsa`), queries (`GetHouses`), events (`GetRiseSet`) | 10,000 per request |
 | Results of `FindCrossings`, `FindStations`, `FindPairCrossings`, `FindAngleCrossings`, `FindEclipses`, `FindReturns`; longitudes in a `list` | 10,000 per request |
-| Queries of `GetSolarTime` and `GetUpagrahas`; instants × bodies of `GetMeanPositions` | 10,000 per request |
+| Queries of `GetSolarTime`; instants × bodies of `GetMeanPositions` | 10,000 per request |
+| Queries × 19 of `GetUpagrahas` (each returns 11 upagrahas and 8 portions) | 10,000 per request (526 queries) |
 | Samples × bodies of one `StreamPositions` | 1,000,000 |
 | Message size | 4 MiB (gRPC default), well above the largest response the limits allow |
 

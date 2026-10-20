@@ -214,7 +214,12 @@ internal object ProtoMapping {
         val bodyA = body(pair.bodyA)
         val bodyB = body(pair.bodyB)
         if (bodyA == bodyB) invalid("body_a and body_b must differ")
-        return PairSpec(bodyA, bodyB, pairSign(pair.combination))
+        val sign = pairSign(pair.combination)
+        // Such a difference is a constant 180 degrees, whose rounding noise would pass for crossings of 180.
+        if (sign < 0 && SweConstants.northOf(bodyA) == SweConstants.northOf(bodyB)) {
+            invalid("a node and its own south node are always 180 degrees apart; their difference has no crossings")
+        }
+        return PairSpec(bodyA, bodyB, sign)
     }
 
     private fun pairSign(combination: PairCombination): Int =
@@ -262,7 +267,8 @@ internal object ProtoMapping {
 
     /**
      * Whether the combined longitude of a pair can reverse. With the Moon it cannot: over 1800-2400 the Moon moves at
-     * least 11.7 degrees a day and no other body faster than 2.3, so the difference and the sum keep moving forward.
+     * least 11.7 degrees a day and no other body faster than 2.3, so the combined speed keeps its sign (positive for a
+     * sum or a Moon-first difference, negative for a Moon-second difference).
      */
     fun pairCanStation(
         seBodyA: Int,

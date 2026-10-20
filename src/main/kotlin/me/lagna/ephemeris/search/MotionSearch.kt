@@ -219,11 +219,11 @@ class MotionSearch(
         limit: Int = Int.MAX_VALUE,
     ): List<CrossingHit> {
         if (to <= from) return emptyList()
-        val knots = sampleTimes(from, to, if (forwardOnly) emptyList() else stations(from, to).map { it.jd })
+        val knots = sampleTimes(from, to, if (forwardOnly) emptyList() else stations(from, to).map { it.jd }).iterator()
         val hits = mutableListOf<CrossingHit>()
-        var a = knots.first()
+        var a = knots.next()
         var longitudeA = source.longitudeAt(a)
-        for (c in knots.drop(1)) {
+        for (c in knots) {
             val longitudeC = source.longitudeAt(c)
             val delta = if (forwardOnly) normalize(longitudeC - longitudeA) else signedDelta(longitudeC - longitudeA)
             if (delta != 0.0) {
@@ -249,20 +249,34 @@ class MotionSearch(
         return hits
     }
 
+    /**
+     * [from], every [crossingStep] days after it, [to] and the [stations] (chronological), in order and without
+     * duplicates. Lazy, so that a search stopped at its result limit never builds the samples of the whole range.
+     */
     private fun sampleTimes(
         from: Double,
         to: Double,
         stations: List<Double>,
-    ): List<Double> {
-        val times = sortedSetOf(from, to)
-        var t = from + crossingStep
-        while (t < to) {
-            times += t
-            t += crossingStep
+    ): Sequence<Double> =
+        sequence {
+            val regular = (generateSequence(from) { it + crossingStep }.takeWhile { it < to } + to).iterator()
+            val extra = stations.filter { it > from && it < to }.iterator()
+            var r: Double? = regular.next()
+            var e: Double? = if (extra.hasNext()) extra.next() else null
+            var last = Double.NaN
+            while (r != null || e != null) {
+                val next: Double
+                if (e == null || (r != null && r <= e)) {
+                    next = checkNotNull(r)
+                    r = if (regular.hasNext()) regular.next() else null
+                } else {
+                    next = e
+                    e = if (extra.hasNext()) extra.next() else null
+                }
+                if (next != last) yield(next)
+                last = next
+            }
         }
-        times += stations
-        return times.toList()
-    }
 
     private fun refineStation(
         start: Double,

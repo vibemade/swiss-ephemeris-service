@@ -355,6 +355,7 @@ message BodyPair {
   Body body_a = 1;
   Body body_b = 2;
   PairCombination combination = 3;
+  // A node and its own south node are always 180 degrees apart, so their DIFFERENCE is INVALID_ARGUMENT.
 }
 
 message PairCrossingsRequest {
@@ -377,7 +378,9 @@ message PairCrossingsResponse {
 message PairCrossing {
   google.protobuf.Timestamp instant = 1;
   double value = 2;    // the target value crossed, degrees [0, 360)
-  bool decreasing = 3; // the combined value was decreasing when it crossed (never for pairs with the Moon)
+  // The combined value was decreasing when it crossed. Pairs with the Moon never reverse: a sum or a difference
+  // with the Moon as body_a always increases, a difference with the Moon as body_b always decreases.
+  bool decreasing = 3;
 }
 
 // ---------------------------------------------------------------- angle crossings (since 0.2.0)
@@ -532,6 +535,8 @@ enum PortionPoint {
 }
 
 message UpagrahasRequest {
+  // Each query counts as 19 items (11 upagrahas, 8 portions) against the per-request limit (GetInfo): 526 queries by
+  // default.
   repeated InstantAtPlace queries = 1;
   Zodiac zodiac = 2;
   // Defines sunrise and sunset, which bound the day and the night. Unspecified: UPPER_LIMB_REFRACTED, as in

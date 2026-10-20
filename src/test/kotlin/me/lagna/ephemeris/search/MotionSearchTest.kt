@@ -129,6 +129,17 @@ class MotionSearchTest {
     }
 
     @org.junit.jupiter.api.Test
+    fun `a search stopped at its limit never samples the whole range`() {
+        // Sampling 1e9 days up front would take gigabytes; lazily, the search stops after a few samples.
+        var calls = 0
+        val counting = MotionSource { jd -> Motion(linear.at(jd).longitude.also { calls++ }, Double.NaN) }
+        shouldThrow<MotionSearch.TooManyResultsException> {
+            MotionSearch(counting, stationStep = 1.0, canStation = false, forwardOnly = true).crossings(0.0, 1e9, LongitudeTargets.Grid(12), limit = 10)
+        }
+        (calls < 10_000) shouldBe true
+    }
+
+    @org.junit.jupiter.api.Test
     fun `signed delta folds angles`() {
         MotionSearch.signedDelta(350.0) shouldBe -10.0
         MotionSearch.signedDelta(-350.0) shouldBe 10.0

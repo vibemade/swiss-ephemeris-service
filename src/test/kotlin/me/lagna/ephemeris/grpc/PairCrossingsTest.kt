@@ -25,6 +25,7 @@ import me.lagna.ephemeris.v1.PairCrossing
 import me.lagna.ephemeris.v1.PairCrossingsRequest
 import me.lagna.ephemeris.v1.PositionRangeRequest
 import me.lagna.ephemeris.v1.PositionsRequest
+import me.lagna.ephemeris.v1.ReturnsRequest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -161,6 +162,65 @@ class PairCrossingsTest {
             for (request in invalid) {
                 shouldThrow<StatusException> { client.findPairCrossings(request) }.status.code shouldBe Status.Code.INVALID_ARGUMENT
             }
+        }
+    }
+
+    @Test
+    fun `a node and its own south node have no difference to search, in either order`() {
+        runBlocking {
+            val constant =
+                listOf(
+                    pair(Body.MEAN_NODE, Body.MEAN_SOUTH_NODE, PairCombination.DIFFERENCE),
+                    pair(Body.MEAN_SOUTH_NODE, Body.MEAN_NODE, PairCombination.DIFFERENCE),
+                    pair(Body.TRUE_NODE, Body.TRUE_SOUTH_NODE, PairCombination.DIFFERENCE),
+                    pair(Body.TRUE_SOUTH_NODE, Body.TRUE_NODE, PairCombination.DIFFERENCE),
+                )
+            val list = LongitudeList.newBuilder().addLongitudes(180.0)
+            for (bodies in constant) {
+                val crossings =
+                    PairCrossingsRequest
+                        .newBuilder()
+                        .setPair(bodies)
+                        .setFrom(timestamp("2000-01-01T00:00:00Z"))
+                        .setTo(timestamp("2001-01-01T00:00:00Z"))
+                        .setList(list)
+                        .build()
+                shouldThrow<StatusException> { client.findPairCrossings(crossings) }.status.code shouldBe Status.Code.INVALID_ARGUMENT
+                val returns =
+                    ReturnsRequest
+                        .newBuilder()
+                        .setPair(bodies)
+                        .setNatal(timestamp("1990-01-01T00:00:00Z"))
+                        .setFrom(timestamp("2000-01-01T00:00:00Z"))
+                        .setTo(timestamp("2001-01-01T00:00:00Z"))
+                        .build()
+                shouldThrow<StatusException> { client.findReturns(returns) }.status.code shouldBe Status.Code.INVALID_ARGUMENT
+            }
+            // Their sum does move (twice the node, plus 180), and so do different nodes.
+            for (bodies in listOf(pair(Body.TRUE_NODE, Body.TRUE_SOUTH_NODE, PairCombination.SUM), pair(Body.MEAN_NODE, Body.TRUE_SOUTH_NODE, PairCombination.DIFFERENCE))) {
+                client.findPairCrossings(
+                    PairCrossingsRequest
+                        .newBuilder()
+                        .setPair(bodies)
+                        .setFrom(timestamp("2000-01-01T00:00:00Z"))
+                        .setTo(timestamp("2001-01-01T00:00:00Z"))
+                        .setGrid(LongitudeGrid.newBuilder().setStepDegrees(30.0))
+                        .build(),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a difference with the Moon second always decreases`() {
+        runBlocking {
+            val crossings =
+                client
+                    .findPairCrossings(moonSun(PairCombination.DIFFERENCE, monthFrom, monthTo, 12.0).toBuilder().setPair(pair(Body.SUN, Body.MOON, PairCombination.DIFFERENCE)).build())
+                    .crossingsList
+            crossings shouldHaveSize 30
+            crossings.all { it.decreasing } shouldBe true
+            crossings.map { it.instant.toInstant() } shouldBe crossings.map { it.instant.toInstant() }.sorted()
         }
     }
 
