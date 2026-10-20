@@ -97,10 +97,50 @@ class MeanPositionsTest {
     }
 
     @Test
-    fun `the classical model is not implemented yet and other bodies are rejected`() {
+    fun `classical mean planets reproduce Raman's Standard Horoscope`() {
+        runBlocking {
+            // Graha and Bhava Balas, examples 41-48: 1918-10-16, 14:06:16 LMT at 77 35' E.
+            val request =
+                MeanPositionsRequest
+                    .newBuilder()
+                    .addInstants(timestamp("1918-10-16T08:55:56Z"))
+                    .addAllBodies(classical - Body.MOON)
+                    .setModel(MeanModel.CLASSICAL)
+                    .build()
+            val response = client.getMeanPositions(request)
+            response.frame shouldBe MeanFrame.CLASSICAL_SIDEREAL
+            val at = response.getResults(0).positionsList.associateBy { it.body }
+            at.getValue(Body.SUN).meanLongitude shouldBe (181.2276 plusOrMinus 0.02)
+            at.getValue(Body.MARS).meanLongitude shouldBe (266.34 plusOrMinus 0.02)
+            // The book's example uses a misprinted cell of table VI (800 days: 66.58 instead of 66.48).
+            at.getValue(Body.JUPITER).meanLongitude shouldBe (66.91 plusOrMinus 0.1)
+            at.getValue(Body.SATURN).meanLongitude shouldBe (111.23 plusOrMinus 0.02)
+            at.getValue(Body.MERCURY).sighrocca shouldBe (174.49 plusOrMinus 0.05)
+            at.getValue(Body.VENUS).sighrocca shouldBe (158.35 plusOrMinus 0.02)
+
+            // Same split between mean longitude and sighrocca as MODERN.
+            at.getValue(Body.SUN).hasSighrocca() shouldBe false
+            for (inner in listOf(Body.MERCURY, Body.VENUS)) at.getValue(inner).meanLongitude shouldBe at.getValue(Body.SUN).meanLongitude
+            for (outer in listOf(Body.MARS, Body.JUPITER, Body.SATURN)) at.getValue(outer).sighrocca shouldBe at.getValue(Body.SUN).meanLongitude
+
+            // The tables have their own frame: the zodiac is ignored, and no ayanamsa matches it.
+            client.getMeanPositions(request.toBuilder().setZodiac(sidereal(Ayanamsa.LAHIRI)).build()) shouldBe response
+            val raman =
+                client
+                    .getMeanPositions(request.toBuilder().setModel(MeanModel.MODERN).setZodiac(sidereal(Ayanamsa.RAMAN)).build())
+                    .getResults(0)
+                    .positionsList
+                    .first { it.body == Body.SUN }
+                    .meanLongitude
+            MotionSearch.signedDelta(raman - at.getValue(Body.SUN).meanLongitude) shouldBe (1.56 plusOrMinus 0.05)
+        }
+    }
+
+    @Test
+    fun `the classical model has no mean Moon, and other bodies and models are rejected`() {
         runBlocking {
             shouldThrow<StatusException> { client.getMeanPositions(request(MeanModel.CLASSICAL)) }.status.code shouldBe
-                Status.Code.UNIMPLEMENTED
+                Status.Code.INVALID_ARGUMENT
             shouldThrow<StatusException> { client.getMeanPositions(request(MeanModel.MEAN_MODEL_UNSPECIFIED)) }.status.code shouldBe
                 Status.Code.INVALID_ARGUMENT
             shouldThrow<StatusException> {

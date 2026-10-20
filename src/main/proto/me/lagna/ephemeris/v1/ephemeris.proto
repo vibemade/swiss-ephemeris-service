@@ -585,8 +585,9 @@ enum MeanModel {
   // Mean elements of modern theory (Simon et al. 1994; the Moon: Chapront, as in Meeus 47.1), referred to the mean
   // equinox of date and converted to the request's zodiac.
   MODERN = 1;
-  // Traditional ahargana-based mean planets from published tables; sidereal by construction. Not implemented yet:
-  // UNIMPLEMENTED until the tables' constants are supplied.
+  // Traditional ahargana-based mean planets of B. V. Raman, "Graha and Bhava Balas" (chapter VI, tables I-IX), in the
+  // book's own sidereal frame; since 0.2.1 (UNIMPLEMENTED in 0.2.0). No mean Moon: a request with MOON is
+  // INVALID_ARGUMENT.
   CLASSICAL = 2;
 }
 
@@ -635,7 +636,7 @@ message InfoResponse {
   uint32 max_items_per_request = 4;          // instants x bodies, queries, ...
   string source_url = 5;                     // AGPL section 13
   uint64 max_stream_items = 6;               // samples x bodies of one StreamPositions
-  // Release of this service, e.g. "0.2.0". Local builds report the Gradle project version (e.g. "0.2.0-SNAPSHOT"),
+  // Release of this service, e.g. "0.2.1". Local builds report the Gradle project version (e.g. "0.2.1-SNAPSHOT"),
   // or "dev" when running from compiled classes rather than a jar.
   string service_version = 7;
 }

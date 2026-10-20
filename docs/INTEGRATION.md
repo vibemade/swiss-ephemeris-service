@@ -1,6 +1,6 @@
 # Ephemeris gRPC API — Integration Guide
 
-Last updated: 2026-10-20 (release 0.2.0)
+Last updated: 2026-10-20 (release 0.2.1)
 
 ## Overview
 
@@ -216,7 +216,7 @@ Limit: queries × 19 ≤ 10,000 (526 queries), since every query returns 19 item
 
 ### GetMeanPositions
 
-Mean (madhya) longitudes and sighrocca of `SUN`, `MOON`, `MERCURY`, `VENUS`, `MARS`, `JUPITER` and `SATURN` (other bodies give `INVALID_ARGUMENT`): for Mars, Jupiter and Saturn the heliocentric mean longitude, with the mean Sun as sighrocca; for Mercury and Venus the mean Sun, with their heliocentric mean longitude as sighrocca; for the Sun and the Moon their mean longitudes, without sighrocca. The `MODERN` model uses the mean elements of Simon et al. (1994) and, for the Moon, Meeus's equation 47.1, referred to the mean equinox of date and shifted by the ayanamsa without nutation for a sidereal zodiac; the response's `frame` is then `REQUEST_ZODIAC`. The `CLASSICAL` model (ahargana-based tables, in their own sidereal frame `CLASSICAL_SIDEREAL`) answers `UNIMPLEMENTED` until its constants are supplied. Limit: instants × bodies ≤ 10,000.
+Mean (madhya) longitudes and sighrocca of `SUN`, `MOON`, `MERCURY`, `VENUS`, `MARS`, `JUPITER` and `SATURN` (other bodies give `INVALID_ARGUMENT`): for Mars, Jupiter and Saturn the heliocentric mean longitude, with the mean Sun as sighrocca; for Mercury and Venus the mean Sun, with their heliocentric mean longitude as sighrocca; for the Sun and the Moon their mean longitudes, without sighrocca. The `MODERN` model uses the mean elements of Simon et al. (1994) and, for the Moon, Meeus's equation 47.1, referred to the mean equinox of date and shifted by the ayanamsa without nutation for a sidereal zodiac; the response's `frame` is then `REQUEST_ZODIAC`. The `CLASSICAL` model (since 0.2.1; `UNIMPLEMENTED` in 0.2.0) gives the ahargana-based mean planets of B. V. Raman's "Graha and Bhava Balas" (chapter VI, tables I–IX) in the book's own sidereal frame: `frame` is `CLASSICAL_SIDEREAL`, the request's `zodiac` is ignored, and no ayanamsa converts it (the classical mean Sun of 1918-10-16 is 1.56° behind the `MODERN` one with `RAMAN`). Each value is L0 + n·D + c(t), with D the days since 0h on 1 January 1900 in Ujjain mean time; the constants reproduce the book's daily motions and its worked example (its Standard Horoscope) to within 0.07°. The book has no classical mean Moon, so a `CLASSICAL` request with `MOON` is `INVALID_ARGUMENT`. Limit: instants × bodies ≤ 10,000.
 
 ### GetInfo
 
@@ -231,7 +231,7 @@ Errors are standard gRPC status codes with a human-readable description; only `U
 | `INVALID_ARGUMENT` | Missing or unspecified field, bad coordinates, a grid step that does not divide 360, a limit exceeded, too many search results | Fix the request; do not retry |
 | `OUT_OF_RANGE` | An instant outside the supported range (`GetInfo`) | Clamp or reject on your side; do not retry |
 | `INTERNAL` | An engine failure that should not happen | Report it with the request; retry once at most |
-| `UNIMPLEMENTED` | A part of the contract this release does not serve yet (`GetMeanPositions` with `CLASSICAL`), or an RPC an older release does not know | Do not retry; fall back or upgrade the service |
+| `UNIMPLEMENTED` | A part of the contract an older release does not serve (`GetMeanPositions` with `CLASSICAL` before 0.2.1, the 0.2 RPCs before 0.2.0) | Do not retry; fall back or upgrade the service |
 | `RESOURCE_EXHAUSTED` | Too many requests are already waiting for a calculation worker | Retry with exponential backoff |
 | `UNAVAILABLE` | Network problem or the service restarting | Retry with exponential backoff; every RPC is idempotent |
 | `DEADLINE_EXCEEDED` | Your deadline passed | Retry with a longer deadline or a narrower range |
@@ -284,7 +284,7 @@ Positions match the reference `swetest` tool built from the same sources to 1e-6
 - **Pair searches** find the same instants as sampling every 0.02 day for the fast pairs tested over 2000–2040; where two slow planets' speeds barely touch, a loop of a few arcseconds (up to 4″ over 1900–2100) may be skipped.
 - **Angle searches** are exact to about 0.1 s; near the polar circles the ascendant moves up to about a degree per second, so its longitude at a reported instant can differ from the target by a few hundredths of a degree.
 - **Eclipses:** over 2026 the maxima, magnitudes and lunar contacts agree with NASA's catalogue to about a minute (the catalogues use slightly different ΔT). The grazing partial solar eclipse of 1935-01-05 (magnitude 0.0013) is reported with magnitude 0, the only such case over 1800–2400.
-- **Mean positions** (`MODERN`) follow published polynomials to their T² terms; over 1900–2100 the mean Sun agrees with Meeus's L0 to 1e-4°.
+- **Mean positions** (`MODERN`) follow published polynomials to their T² terms; over 1900–2100 the mean Sun agrees with Meeus's L0 to 1e-4°. `CLASSICAL` reproduces Raman's worked example to 0.02° for the Sun, Mars, Saturn and the sighrocca of Venus, 0.03° for that of Mercury, and 0.07° for Jupiter, where the book's example uses a misprinted table cell.
 
 ## Licensing and versioning
 
