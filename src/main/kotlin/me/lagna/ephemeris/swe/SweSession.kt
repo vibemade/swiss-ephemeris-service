@@ -439,7 +439,12 @@ class SweSession internal constructor(
         fun MemorySegment.at(index: Int): Double = getAtIndex(JAVA_DOUBLE, index.toLong())
 
         /** The opposite direction, in [0, 360). */
-        fun opposite(degrees: Double): Double = ((degrees + HALF_CIRCLE) % FULL_CIRCLE + FULL_CIRCLE) % FULL_CIRCLE
+        fun opposite(degrees: Double): Double {
+            val remainder = (degrees + HALF_CIRCLE) % FULL_CIRCLE
+            if (remainder >= 0.0) return remainder + 0.0
+            val wrapped = remainder + FULL_CIRCLE
+            return if (wrapped >= FULL_CIRCLE) 0.0 else wrapped
+        }
 
         const val HALF_CIRCLE = 180.0
         const val FULL_CIRCLE = 360.0

@@ -238,7 +238,7 @@ class MotionSearch(
                         if (forwardOnly) {
                             refineForward(a, c, longitudeA, target.value - longitudeA)
                         } else {
-                            refineCrossing(a, c, longitudeA, longitude)
+                            refineCrossing(a, c, rising = delta > 0.0, target = longitude)
                         }
                     hits += CrossingHit(jd, longitude, retrograde = delta < 0.0)
                 }
@@ -292,19 +292,24 @@ class MotionSearch(
         return (lo + hi) / 2
     }
 
+    /**
+     * Bisection for a [target] met between [start] and [end], where the longitude is monotonic. The side the longitude
+     * starts on follows from the direction of motion ([rising]: below the target), not from its value at [start]:
+     * a sample can sit on the target up to round-off, and the sign of that round-off says nothing about the side.
+     */
     private fun refineCrossing(
         start: Double,
         end: Double,
-        longitudeAtStart: Double,
+        rising: Boolean,
         target: Double,
     ): Double {
-        val startSide = isNegative(signedDelta(longitudeAtStart - target))
         var lo = start
         var hi = end
         while (hi - lo > tolerance) {
             val mid = (lo + hi) / 2
             val offset = signedDelta(source.longitudeAt(mid) - target)
-            if (offset != 0.0 && isNegative(offset) == startSide) lo = mid else hi = mid
+            val beforeTarget = if (rising) offset < 0.0 else offset > 0.0
+            if (beforeTarget) lo = mid else hi = mid
         }
         return (lo + hi) / 2
     }
@@ -342,11 +347,20 @@ class MotionSearch(
 
         private fun isNegative(value: Double) = value < 0.0
 
-        /** Angle difference folded into [-180, 180). */
-        fun signedDelta(degrees: Double): Double =
-            ((degrees + HALF_CIRCLE) % FULL_CIRCLE + FULL_CIRCLE) % FULL_CIRCLE - HALF_CIRCLE
+        /** Angle difference folded into [-180, 180); a difference already in that range is returned exactly. */
+        fun signedDelta(degrees: Double): Double {
+            if (degrees >= -HALF_CIRCLE && degrees < HALF_CIRCLE) return degrees
+            val folded = normalize(degrees)
+            return if (folded >= HALF_CIRCLE) folded - FULL_CIRCLE else folded
+        }
 
-        fun normalize(degrees: Double): Double = (degrees % FULL_CIRCLE + FULL_CIRCLE) % FULL_CIRCLE
+        /** Angle folded into [0, 360); an angle already in that range is returned exactly. */
+        fun normalize(degrees: Double): Double {
+            val remainder = degrees % FULL_CIRCLE
+            if (remainder >= 0.0) return remainder + 0.0 // turns -0.0 into 0.0
+            val wrapped = remainder + FULL_CIRCLE
+            return if (wrapped >= FULL_CIRCLE) 0.0 else wrapped
+        }
     }
 }
 

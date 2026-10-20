@@ -1,6 +1,6 @@
 # Ephemeris gRPC API — Integration Guide
 
-Last updated: 2026-10-20 (release 0.2.1)
+Last updated: 2026-10-20 (release 0.2.2)
 
 ## Overview
 
